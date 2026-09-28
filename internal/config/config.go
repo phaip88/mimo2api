@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"os"
 	"strconv"
@@ -79,7 +81,9 @@ func Load() {
 		} else if len(APIKeys) > 0 {
 			WebUISecretKey = APIKeys[0]
 		} else {
-			WebUISecretKey = "mimo2-webui-fallback-secret"
+			buf := make([]byte, 24)
+			_, _ = rand.Read(buf)
+			WebUISecretKey = hex.EncodeToString(buf)
 		}
 	}
 	WebUICookieName = getEnv("MIMO_WEBUI_COOKIE_NAME", "mimo_webui_session")

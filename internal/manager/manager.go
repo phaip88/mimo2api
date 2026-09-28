@@ -58,31 +58,68 @@ func (m *AccountManager) GetActiveUsersCount() int {
 }
 
 func (m *AccountManager) AddUser(rawText string) (string, error) {
-	re := regexp.MustCompile(`([a-zA-Z0-9_]+)="?([^;"]+)"?`)
-	matches := re.FindAllStringSubmatch(rawText, -1)
+	cleanVal := func(s string) string {
+		s = strings.TrimSpace(s)
+		for (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) || (strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
+			s = strings.TrimSpace(s[1 : len(s)-1])
+		}
+		return s
+	}
+
 	parsed := make(map[string]string)
-	for _, match := range matches {
+
+	// 1. Match standard cookie: key="value" or key=value
+	reCookie := regexp.MustCompile(`([a-zA-Z0-9_]+)="?([^;"]+)"?`)
+	for _, match := range reCookie.FindAllStringSubmatch(rawText, -1) {
 		if len(match) == 3 {
-			parsed[match[1]] = match[2]
+			parsed[match[1]] = cleanVal(match[2])
+		}
+	}
+
+	// 2. Match line-based or tab/space/colon-separated format
+	reLine := regexp.MustCompile(`(?i)\b(userId|uid|serviceToken|xiaomichatbot_serviceToken|xiaomichatbot_ph|ph)\b\s*[:=\t ]+\s*["']*([^\r\n;]+)`)
+	for _, match := range reLine.FindAllStringSubmatch(rawText, -1) {
+		if len(match) == 3 {
+			k := strings.ToLower(match[1])
+			v := cleanVal(match[2])
+			if k == "userid" || k == "uid" {
+				parsed["userId"] = v
+			} else if k == "servicetoken" || k == "xiaomichatbot_servicetoken" {
+				parsed["serviceToken"] = v
+			} else if k == "xiaomichatbot_ph" || k == "ph" {
+				parsed["xiaomichatbot_ph"] = v
+			}
 		}
 	}
 
 	uid := parsed["userId"]
 	st := parsed["serviceToken"]
+	if st == "" {
+		st = parsed["xiaomichatbot_serviceToken"]
+	}
 	ph := parsed["xiaomichatbot_ph"]
+	if ph == "" {
+		ph = parsed["ph"]
+	}
 
 	if uid == "" || st == "" || ph == "" {
-		// Fallback to JSON parsing for testing
+		// Fallback to JSON parsing
 		var user models.UserRecord
-		if err := json.Unmarshal([]byte(rawText), &user); err != nil {
-			return "", fmt.Errorf("missing required fields in cookie string")
+		if err := json.Unmarshal([]byte(rawText), &user); err == nil {
+			if user.UserID != "" {
+				uid = user.UserID
+			}
+			if user.ServiceToken != "" {
+				st = user.ServiceToken
+			}
+			if user.PH != "" {
+				ph = user.PH
+			}
 		}
-		uid = user.UserID
-		st = user.ServiceToken
-		ph = user.PH
-		if uid == "" || st == "" || ph == "" {
-			return "", fmt.Errorf("missing required fields")
-		}
+	}
+
+	if uid == "" || st == "" || ph == "" {
+		return "", fmt.Errorf("missing required fields in cookie string")
 	}
 
 	user := models.UserRecord{
