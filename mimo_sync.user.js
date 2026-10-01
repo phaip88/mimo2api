@@ -1,11 +1,15 @@
 // ==UserScript==
 // @name         mimo2api 小米凭证自动同步助手
 // @namespace    https://github.com/phaip88/mimo2api
-// @version      1.1.0
+// @version      1.2.0
 // @description  一键自动获取 Xiaomi AI Studio 登录凭证并同步至 mimo2api 服务端
 // @author       mimo2api
 // @match        https://aistudio.xiaomimimo.com/*
 // @match        https://*.xiaomimimo.com/*
+// @match        https://xiaomimimo.com/*
+// @match        https://*.xiaomi.com/*
+// @match        https://xiaomi.com/*
+// @match        https://account.xiaomi.com/*
 // @grant        GM_cookie
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
@@ -18,7 +22,6 @@
 (function() {
     'use strict';
 
-    // 默认配置（可通过脚本菜单或浮窗随时修改）
     const DEFAULT_SERVER = "http://localhost:8088";
     const DEFAULT_KEY = "";
 
@@ -29,14 +32,13 @@
         return GM_getValue('mimo_api_key', DEFAULT_KEY) || '';
     }
 
-    // 页面提示 Toast
     function showToast(msg, type = 'info') {
         const id = 'mimo-sync-toast';
         let toast = document.getElementById(id);
         if (!toast) {
             toast = document.createElement('div');
             toast.id = id;
-            toast.style.cssText = 'position:fixed;top:24px;right:24px;z-index:999999;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.18);display:flex;align-items:center;gap:10px;transition:all 0.3s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+            toast.style.cssText = 'position:fixed;top:24px;right:24px;z-index:999999;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.18);display:flex;align-items:center;gap:10px;transition:all 0.3s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:400px;line-height:1.5;';
             document.body.appendChild(toast);
         }
         if (type === 'success') {
@@ -56,38 +58,49 @@
         toast._timer = setTimeout(() => {
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(-10px)';
-        }, 4000);
+        }, 5000);
     }
 
-    // 获取 Cookie（支持 HttpOnly）
     async function getCookies() {
         const cookieMap = {};
+        const gmSupported = (typeof GM_cookie !== 'undefined' && typeof GM_cookie.list === 'function');
+        let lastError = null;
 
-        const getByFilter = (filter) => new Promise((resolve) => {
-            if (typeof GM_cookie !== 'undefined' && GM_cookie.list) {
-                GM_cookie.list(filter, (cookies, error) => {
-                    if (!error && Array.isArray(cookies)) {
-                        resolve(cookies);
-                    } else {
-                        resolve([]);
-                    }
-                });
-            } else {
-                resolve([]);
-            }
-        });
+        if (gmSupported) {
+            const getByFilter = (filter) => new Promise((resolve) => {
+                try {
+                    GM_cookie.list(filter, (cookies, error) => {
+                        if (error) {
+                            lastError = error;
+                            console.warn('[mimo-sync] GM_cookie.list error for filter', filter, error);
+                            resolve([]);
+                        } else if (Array.isArray(cookies)) {
+                            resolve(cookies);
+                        } else {
+                            resolve([]);
+                        }
+                    });
+                } catch (e) {
+                    lastError = e.message;
+                    resolve([]);
+                }
+            });
 
-        const [cUrl, cDomain, cDotDomain] = await Promise.all([
-            getByFilter({ url: window.location.href }),
-            getByFilter({ domain: 'xiaomimimo.com' }),
-            getByFilter({ domain: '.xiaomimimo.com' })
-        ]);
+            const results = await Promise.all([
+                getByFilter({ url: 'https://aistudio.xiaomimimo.com/' }),
+                getByFilter({ url: window.location.href }),
+                getByFilter({ domain: 'xiaomimimo.com' }),
+                getByFilter({ domain: '.xiaomimimo.com' }),
+                getByFilter({ domain: 'xiaomi.com' }),
+                getByFilter({ domain: '.xiaomi.com' })
+            ]);
 
-        [...cUrl, ...cDomain, ...cDotDomain].forEach(c => {
-            if (c && c.name && c.value) {
-                cookieMap[c.name] = c.value;
-            }
-        });
+            results.flat().forEach(c => {
+                if (c && c.name && c.value) {
+                    cookieMap[c.name] = c.value;
+                }
+            });
+        }
 
         if (document.cookie) {
             document.cookie.split(';').forEach(item => {
@@ -100,10 +113,47 @@
             });
         }
 
-        return cookieMap;
+        return { cookieMap, gmSupported, lastError };
     }
 
-    // 执行凭证提取与同步
+    function sendPayload(payload, onSuccess) {
+        const server = getServer();
+        const key = getApiKey();
+        const targetUrl = server + '/api/users/add';
+
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        if (key) {
+            headers['Authorization'] = 'Bearer ' + key;
+            headers['X-API-Key'] = key;
+            headers['X-WebUI-Password'] = key;
+        }
+
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: targetUrl,
+            headers: headers,
+            data: JSON.stringify(payload),
+            onload: function(response) {
+                if (response.status >= 200 && response.status < 300) {
+                    showToast('✅ 凭据同步成功！' + (payload.userId ? '用户ID: ' + payload.userId : ''), 'success');
+                    if (onSuccess) onSuccess();
+                } else {
+                    let errMsg = response.responseText;
+                    try {
+                        const parsed = JSON.parse(response.responseText);
+                        errMsg = parsed.detail || parsed.error || response.responseText;
+                    } catch(e) {}
+                    showToast('❌ 同步失败 [' + response.status + ']: ' + errMsg, 'error');
+                }
+            },
+            onerror: function() {
+                showToast('❌ 无法连接到 mimo2api (' + server + ')，请检查网络或配置', 'error');
+            }
+        });
+    }
+
     async function doSync() {
         const btn = document.getElementById('mimo-sync-btn');
         if (btn) {
@@ -113,7 +163,7 @@
         }
 
         try {
-            const cookies = await getCookies();
+            const { cookieMap: cookies, gmSupported, lastError } = await getCookies();
             let userId = cookies['userId'] || cookies['cUserId'] || cookies['uid'] || '';
             let st = cookies['xiaomichatbot_serviceToken'] || cookies['serviceToken'] || '';
             let ph = cookies['xiaomichatbot_ph'] || cookies['ph'] || '';
@@ -135,50 +185,28 @@
             }
 
             if (!st || !ph) {
-                showToast('⚠️ 未检测到有效登录凭据，请先在当前页面登录小米账号！', 'error');
+                if (!gmSupported) {
+                    showToast('⚠️ 当前扩展（如暴力猴）不支持读取 HttpOnly 凭据，请改用 Tampermonkey（篡改猴）！', 'error');
+                } else if (lastError) {
+                    showToast('⚠️ Cookie 权限受限: ' + lastError + '，请在 Tampermonkey 提示中点击允许！', 'error');
+                } else {
+                    showToast('⚠️ 未检测到有效登录凭据，请先在当前页面登录小米账号！', 'error');
+                }
+
+                setTimeout(() => {
+                    const fallback = prompt('未自动读取到 HttpOnly 凭证（可能受浏览器/扩展安全限制）。\n\n如已有 Cookie / cURL 抓包文本，可直接粘贴于此并确定：');
+                    if (fallback && fallback.trim()) {
+                        sendPayload({ raw_text: fallback.trim() });
+                    }
+                }, 600);
                 return;
             }
 
-            const server = getServer();
-            const key = getApiKey();
-            const targetUrl = server + '/api/users/add';
-
-            const payload = {
+            sendPayload({
                 userId: userId,
                 xiaomichatbot_serviceToken: st,
                 xiaomichatbot_ph: ph,
                 raw_text: 'userId=' + userId + '; xiaomichatbot_serviceToken=' + st + '; xiaomichatbot_ph=' + ph + ';'
-            };
-
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-            if (key) {
-                headers['Authorization'] = 'Bearer ' + key;
-                headers['X-API-Key'] = key;
-                headers['X-WebUI-Password'] = key;
-            }
-
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: targetUrl,
-                headers: headers,
-                data: JSON.stringify(payload),
-                onload: function(response) {
-                    if (response.status >= 200 && response.status < 300) {
-                        showToast('✅ 凭据同步成功！用户ID: ' + (userId || '已解析'), 'success');
-                    } else {
-                        let errMsg = response.responseText;
-                        try {
-                            const parsed = JSON.parse(response.responseText);
-                            errMsg = parsed.detail || parsed.error || response.responseText;
-                        } catch(e) {}
-                        showToast('❌ 同步失败 [' + response.status + ']: ' + errMsg, 'error');
-                    }
-                },
-                onerror: function() {
-                    showToast('❌ 无法连接到 mimo2api (' + server + ')，请检查网络或配置', 'error');
-                }
             });
 
         } catch (err) {
