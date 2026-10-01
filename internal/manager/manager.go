@@ -60,8 +60,21 @@ func (m *AccountManager) GetActiveUsersCount() int {
 func (m *AccountManager) AddUser(rawText string) (string, error) {
 	cleanVal := func(s string) string {
 		s = strings.TrimSpace(s)
-		for (strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"")) || (strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) {
-			s = strings.TrimSpace(s[1 : len(s)-1])
+		for {
+			orig := s
+			s = strings.TrimPrefix(s, "\\\"")
+			s = strings.TrimPrefix(s, "\\'")
+			s = strings.TrimPrefix(s, "\"")
+			s = strings.TrimPrefix(s, "'")
+			s = strings.TrimSuffix(s, "\\\"")
+			s = strings.TrimSuffix(s, "\\'")
+			s = strings.TrimSuffix(s, "\"")
+			s = strings.TrimSuffix(s, "'")
+			s = strings.TrimSuffix(s, "\\")
+			s = strings.TrimSpace(s)
+			if s == orig {
+				break
+			}
 		}
 		return s
 	}
@@ -69,15 +82,15 @@ func (m *AccountManager) AddUser(rawText string) (string, error) {
 	parsed := make(map[string]string)
 
 	// 1. Match standard cookie: key="value" or key=value
-	reCookie := regexp.MustCompile(`([a-zA-Z0-9_]+)="?([^;"]+)"?`)
+	reCookie := regexp.MustCompile(`([a-zA-Z0-9_]+)\s*=\s*([^;\r\n]+)`)
 	for _, match := range reCookie.FindAllStringSubmatch(rawText, -1) {
 		if len(match) == 3 {
 			parsed[match[1]] = cleanVal(match[2])
 		}
 	}
 
-	// 2. Match line-based or tab/space/colon-separated format
-	reLine := regexp.MustCompile(`(?i)\b(userId|uid|serviceToken|xiaomichatbot_serviceToken|xiaomichatbot_ph|ph)\b\s*[:=\t ]+\s*["']*([^\r\n;]+)`)
+	// 2. Match line-based, cURL header or tab/space/colon-separated format
+	reLine := regexp.MustCompile(`(?i)\b(userId|uid|serviceToken|xiaomichatbot_serviceToken|xiaomichatbot_ph|ph)\b\s*[:=\t ]+\s*(.+?)(?:;|\r|\n|$)`)
 	for _, match := range reLine.FindAllStringSubmatch(rawText, -1) {
 		if len(match) == 3 {
 			k := strings.ToLower(match[1])

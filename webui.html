@@ -1035,11 +1035,13 @@
                 <i data-lucide="key" style="color: var(--primary);"></i> 导入 Xiaomi 凭证数据
             </div>
             <div class="form-group">
-                <label class="form-label" style="margin-bottom: 6px;">输入 Cookie 或者多行抓包数据文本</label>
+                <label class="form-label" style="margin-bottom: 6px;">输入 Cookie / 浏览器复制为 cURL / 多行抓包文本</label>
                 <textarea id="cookieInput" class="textarea-control"
-                    placeholder='输入类似: userId=123456789; serviceToken="vjQ3..."; xiaomichatbot_ph="abcd..."'></textarea>
-                <div class="modal-hint">系统将自动清洗并从中解析出 <code>userId</code>, <code>serviceToken</code> 及
-                    <code>xiaomichatbot_ph</code> 字段进行入库。</div>
+                    placeholder='支持多种输入格式：
+1. 浏览器 F12 网络请求「复制为 cURL」(推荐直接整段粘贴)
+2. 完整 Cookie: userId=xxx; xiaomichatbot_serviceToken=xxx; xiaomichatbot_ph=xxx;
+3. 多行键值对: userId xxx \n serviceToken xxx \n ph xxx'></textarea>
+                <div class="modal-hint">系统已内置智能正则过滤器，支持直接整段粘贴 cURL、Cookie 或键值对，自动过滤引号并精准提取 <code>userId</code>、<code>serviceToken</code> 及 <code>xiaomichatbot_ph</code>。</div>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-outline" onclick="closeImportModal()">取消</button>
@@ -1500,14 +1502,16 @@
                 const cleanQuote = s => {
                     if (!s) return '';
                     let res = s.trim();
-                    while ((res.startsWith('"') && res.endsWith('"')) || (res.startsWith("'") && res.endsWith("'"))) {
-                        res = res.slice(1, -1).trim();
+                    while (true) {
+                        let orig = res;
+                        res = res.replace(/^(?:\\\"|\\\'|["'])+/, '').replace(/(?:\\\"|\\\'|["'\\\\])+$/, '').trim();
+                        if (res === orig) break;
                     }
                     return res;
                 };
-                const mUid = val.match(/(?:userId|uid)\s*[:=\s\t]+\s*["']?([0-9a-zA-Z_-]+)/i);
-                const mSt = val.match(/(?:xiaomichatbot_serviceToken|serviceToken)\s*[:=\s\t]+\s*["']*(.+?)["']*(?:;|\r|\n|$)/i);
-                const mPh = val.match(/(?:xiaomichatbot_ph|\bph\b)\s*[:=\s\t]+\s*["']*(.+?)["']*(?:;|\r|\n|$)/i);
+                const mUid = val.match(/(?:userId|uid)\s*[:=\s\t]+\s*(.+?)(?:;|\r|\n|$)/i);
+                const mSt = val.match(/(?:xiaomichatbot_serviceToken|serviceToken)\s*[:=\s\t]+\s*(.+?)(?:;|\r|\n|$)/i);
+                const mPh = val.match(/(?:xiaomichatbot_ph|\bph\b)\s*[:=\s\t]+\s*(.+?)(?:;|\r|\n|$)/i);
                 if (mUid && mSt && mPh) {
                     const uid = cleanQuote(mUid[1]);
                     const st = cleanQuote(mSt[1]);
