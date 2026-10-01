@@ -38,6 +38,7 @@ func SetupRouter() *gin.Engine {
 	// UI and open endpoints
 	r.GET("/", WebUIHandler)
 	r.GET("/webui", WebUIHandler)
+	r.GET("/mimo_sync.user.js", UserscriptHandler)
 
 	uiAPI := r.Group("/api")
 	{

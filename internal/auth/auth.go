@@ -73,11 +73,36 @@ func WebUIMiddleware() gin.HandlerFunc {
 			return
 		}
 		token, err := c.Cookie(config.WebUICookieName)
-		if err != nil || !verifySessionToken(token) {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		if err == nil && verifySessionToken(token) {
+			c.Next()
 			return
 		}
-		c.Next()
+
+		authHeader := c.GetHeader("Authorization")
+		key := ""
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			key = authHeader[7:]
+		} else if k := c.GetHeader("x-api-key"); k != "" {
+			key = k
+		} else if k := c.GetHeader("api-key"); k != "" {
+			key = k
+		} else if k := c.GetHeader("X-WebUI-Password"); k != "" {
+			key = k
+		} else {
+			key = c.Query("api_key")
+			if key == "" {
+				key = c.Query("token")
+			}
+		}
+
+		if key != "" {
+			if key == config.WebUIPassword || verifySessionToken(key) || (HasAnyAPIKey() && ValidateAndRecordAPIKey(key)) {
+				c.Next()
+				return
+			}
+		}
+
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 	}
 }
 func APIAuthMiddleware() gin.HandlerFunc {

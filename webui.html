@@ -867,12 +867,17 @@
                         <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">此处管理提供底层算力支持的 Xiaomi
                             内网代理账号凭证。</p>
                     </div>
-                    <button class="btn" onclick="openImportModal()">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg> 导入凭证 Cookie </button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-outline" onclick="installUserscript()" title="安装油猴脚本一键自动同步小米账号">
+                            <i data-lucide="zap" style="color: var(--primary); width: 15px; height: 15px;"></i> 油猴自动同步
+                        </button>
+                        <button class="btn" onclick="openImportModal()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg> 导入凭证 Cookie </button>
+                    </div>
                 </div>
                 <div class="table-wrapper">
                     <table id="usersTable">
@@ -1033,6 +1038,24 @@
         <div class="modal">
             <div class="modal-title">
                 <i data-lucide="key" style="color: var(--primary);"></i> 导入 Xiaomi 凭证数据
+            </div>
+            <div style="background: rgba(255, 103, 0, 0.06); border: 1px solid rgba(255, 103, 0, 0.2); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <div>
+                    <div style="font-weight: 600; font-size: 13px; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="zap" style="color: var(--primary); width: 16px; height: 16px;"></i> 推荐：油猴一键免提取同步
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-top: 2px;">
+                        无需抓包或手动复制，登录小米 AI Studio 后脚本浮窗一键自动同步。
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm" onclick="installUserscript()" style="background: var(--primary); color: white;">
+                        <i data-lucide="download" style="width: 14px; height: 14px;"></i> 安装脚本
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="copyUserscript()">
+                        <i data-lucide="copy" style="width: 14px; height: 14px;"></i> 复制源码
+                    </button>
+                </div>
             </div>
             <div class="form-group">
                 <label class="form-label" style="margin-bottom: 6px;">输入 Cookie / 浏览器复制为 cURL / 多行抓包文本</label>
@@ -1542,6 +1565,24 @@
                 }
             } catch (e) {
                 if (e.message !== 'UNAUTHORIZED') showToast('提交异常', 'error');
+            }
+        }
+
+        function installUserscript() {
+            const origin = window.location.origin;
+            const url = `${origin}/mimo_sync.user.js?server=${encodeURIComponent(origin)}`;
+            window.open(url, '_blank');
+        }
+
+        async function copyUserscript() {
+            try {
+                const origin = window.location.origin;
+                const res = await fetch(`${origin}/mimo_sync.user.js?server=${encodeURIComponent(origin)}`);
+                const text = await res.text();
+                await navigator.clipboard.writeText(text);
+                showToast('油猴脚本源码已复制到剪贴板！');
+            } catch (e) {
+                showToast('复制失败，请直接点击安装脚本', 'error');
             }
         }
 
