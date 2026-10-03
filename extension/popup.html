@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MiMo 凭据连接器</title>
+    <link rel="stylesheet" href="popup.css" />
+    <script src="connector.js" defer></script>
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <span class="mark">M</span>
+      <div>
+        <strong>MiMo 连接器</strong
+        ><small>只同步当前账号 · 不保存 Cookie</small>
+      </div>
+      <span class="version">2.0</span>
+    </header>
+    <main>
+      <div class="eyebrow">连接你的网关</div>
+      <h1>登录，然后同步。</h1>
+      <p>在 AI Studio 标签页打开本扩展，粘贴控制台的配对码。</p>
+      <label for="pairing">一次性配对码 <span>5 分钟内有效</span></label
+      ><textarea
+        id="pairing"
+        rows="4"
+        placeholder="粘贴控制台生成的完整配对码"
+        spellcheck="false"
+        autocomplete="off"
+      ></textarea>
+      <div class="destination">
+        <span>同步目标</span><strong id="destination">等待配对码</strong>
+      </div>
+      <button id="sync" type="button">授权并同步账号 <span>→</span></button>
+      <div id="status" role="status" aria-live="polite">
+        仅请求指定网关的权限；无需管理密码或 API Key。
+      </div>
+      <a
+        href="https://aistudio.xiaomimimo.com/"
+        target="_blank"
+        rel="noreferrer"
+        >打开 Xiaomi AI Studio ↗</a
+      >
+    </main>
+    <footer>通过浏览器原生 Cookie API 读取 HttpOnly 凭据。</footer>
+  </body>
+</html>

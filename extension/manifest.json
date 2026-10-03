@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "MiMo 凭据连接器",
+  "version": "2.0.0",
+  "description": "在明确授权后，将当前 Xiaomi AI Studio 账号同步到你的 MiMo2API 网关。",
+  "permissions": ["cookies", "activeTab"],
+  "host_permissions": ["https://aistudio.xiaomimimo.com/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_title": "同步到 MiMo2API",
+    "default_popup": "popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "mimo-connector@mimo2api.local",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["authenticationInfo"]
+      }
+    }
+  }
+}

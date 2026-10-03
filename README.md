@@ -1,158 +1,108 @@
 # MiMo2API
 
-<p align="center">
-  <strong>轻量、高效、开箱即用的小米 MiMo 模型转 OpenAI / Anthropic 个人 API 网关</strong>
-</p>
+个人部署的 MiMo 模型网关，提供 OpenAI / Anthropic 兼容 API，以及中文账号、路由和运行监控控制台。
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat-square&logo=go" alt="Go Version" />
-  <img src="https://img.shields.io/badge/OpenAI-Compatible-412991?style=flat-square&logo=openai" alt="OpenAI Compatible" />
-  <img src="https://img.shields.io/badge/Anthropic-Compatible-D97706?style=flat-square&logo=anthropic" alt="Anthropic Compatible" />
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
-</p>
+![控制台预览](docs/console-preview.png)
 
----
+## 本次更新
 
-## 📖 项目简介
+- **中文控制台**：侧栏导航、服务概览、账号管理、模型映射、运行监控和接入配置，支持手机布局与键盘操作。
+- **原生浏览器连接器**：使用 Cookie API 读取 HttpOnly 登录凭据，支持 Firefox 142+ 和 Chromium。识别当前标签页的 Firefox 容器，不混用其他账号的 Cookie。
+- **一次性配对**：控制台生成 5 分钟有效、只能使用一次的配对码；只能导入一个账号，不能用于其他管理操作。扩展不需要管理密码或 API Key。
+- **凭据最小化**：扩展不持久保存 Cookie 或配对码；账号列表不再返回 serviceToken、PH 或 sessionKey；远程同步只允许 HTTPS。
+- **独立部署**：页面、样式、脚本、图标和扩展全部内嵌二进制；删除第三方字体、图标 CDN 与统计脚本，不依赖运行目录中的网页文件。
 
-**MiMo2API** 是专为个人开发者与 AI 爱好者打造的小米大模型（MiMo）转接网关。通过对接底层的算力环境，提供完全兼容 **OpenAI** 与 **Anthropic (Claude)** 协议的标准接口，无缝接入各类常用客户端工具（如 NextChat、Cherry Studio、Chatbox、沉浸式翻译等）。
+## 为什么 Firefox 油猴读取失败？
 
-相比原版复杂的社区多用户体系，本项目经过全面精简与优化，移除了冗余的第三方 OAuth 与公共站逻辑，强化了凭据解析容错，并将实时监控看板完整内嵌至单页控制台中，提供纯净、快速、专注个人使用的交互体验。
+登录所需的凭据可能设置了 **HttpOnly**。页面的 `document.cookie` 无法读取；油猴管理器的 `GM_cookie` / `GM.cookie` 并不是 Firefox 上可靠可用的能力。安装或更换油猴管理器不能保证解决。
 
----
+推荐使用本项目的**原生浏览器连接器**，由浏览器授予 Cookie 权限。油猴脚本仅在支持 Cookie API 的环境工作；Firefox 会明确显示原生扩展指引，不再误报“换 Tampermonkey 即可”。
 
-## ✨ 核心特性
+## 编译与运行
 
-- **双协议兼容**：
-  - **OpenAI 格式**：`/v1/chat/completions`、`/v1/models`
-  - **Anthropic 格式**：`/anthropic/v1/messages`（支持 Claude 原生客户端直接对接）
-- **极简个人控制台**：
-  - 移除非个人使用的 Linux.do OAuth 等社区分发组件，页面更轻量、响应更迅捷。
-  - 首屏提供**个人接入快速引导卡片**，动态呈现 Base URL 与认证格式，支持一键复制配置。
-- **一体化服务监控**：
-  - 核心指标看板：在线时长、请求成功率、平均响应延迟 / 首字延迟 (TTFT)、Token 吞吐量（输入与输出明细）。
-  - 可用率历史轴：24 小时状态色块可视化展示服务稳定性。
-  - 模型流量明细：统计各模型的请求频次（流式 / 非流式）、平均延迟与消耗。
-  - 完全内嵌原生页面，不再依赖任何外部第三方监控站点。
-- **智能凭证清洗与解析**：
-  - 自动适配从浏览器开发者工具（F12）Cookie 表格直接复制出的制表符/空格分隔格式。
-  - 自动清洗多层嵌套引号与字段别名（如自动兼容 `xiaomichatbot_serviceToken` 与 `serviceToken`）。
-- **动态模型映射**：
-  - 支持自定义模型路由别名（例如将客户端的 `gpt-4o`、`claude-3-5-sonnet` 自动转发至目标模型 `mimo-v2.5-pro`）。
-- **纯净安全**：
-  - 剔除历史硬编码调试密钥与社区外链提示，未配置密钥时自动生成高强度随机凭据，避免凭据泄漏风险。
+要求 **Go 1.26.3+ 和 C 编译器**（SQLite 依赖 CGO）。生产构建不需要 Node.js。
 
----
-
-## 🚀 快速上手
-
-### 1. 本地编译与运行
-
-#### 环境要求
-- Go 1.21 或更高版本
-
-#### 获取源码与编译
 ```bash
 git clone https://github.com/phaip88/mimo2api.git
 cd mimo2api
+go build -trimpath -ldflags="-s -w" -o bin/mimo2api ./cmd/mimo2api
 
-# 下载依赖并编译二进制
-go mod tidy
-go build -o mimo2api ./cmd/mimo2api
+# 在当前进程环境生成并注入凭据，不写入源码或配置文件。
+export MIMO_API_KEYS="$(openssl rand -hex 32)"
+export MIMO_WEBUI_USERNAME=admin
+export MIMO_WEBUI_PASSWORD="$(openssl rand -hex 32)"
+export MIMO_WEBUI_SECRET_KEY="$(openssl rand -hex 32)"
+export SERVER_HOST=127.0.0.1
+export SERVER_PORT=8088
+export GIN_MODE=release
+./bin/mimo2api
 ```
 
-#### 配置环境
-在同目录下创建 `.env` 文件（参考后文的配置项表格）：
-```ini
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8088
-GIN_MODE=release
+通过自己的密码管理器或平台密钥服务管理环境变量。访问 [本地控制台](http://127.0.0.1:8088/webui)，使用注入的管理凭据登录。远程部署通过 HTTPS 访问。
 
-# 个人网关 API Key (用于客户端调用，多个用逗号隔开)
-MIMO_API_KEYS=sk-mimo-my-secret-key-123456
+## 连接 Xiaomi 账号
 
-# WebUI 管理后台凭证
-MIMO_WEBUI_USERNAME=admin
-MIMO_WEBUI_PASSWORD=YourStrongPassword123
-```
+1. 控制台点击 **连接账号 → 下载扩展**，解压 ZIP。
+2. Firefox 打开 `about:debugging#/runtime/this-firefox`，点击「临时载入附加组件」，选择解压目录里的 `manifest.json`。Chromium 在扩展管理页启用开发者模式，加载已解压目录。
+3. 登录 [Xiaomi AI Studio](https://aistudio.xiaomimimo.com/)。Firefox 容器账号需在对应容器标签页操作。
+4. 回到控制台生成并复制配对码。在已登录的 AI Studio 标签页打开扩展，粘贴配对码，核对网关地址，点击 **授权并同步账号**。
+5. 回到控制台查看账号状态。导入成功代表凭据已保存；节点创建、可用状态由实际运行结果决定。
 
-#### 启动服务
-```bash
-# 直接运行
-./mimo2api
+> 仓库提供未签名开发版扩展。Firefox 临时安装在浏览器重启后失效；长期安装需要 Mozilla 签名，ZIP 不是可直接永久安装的签名 XPI。
 
-# 或后台运行
-nohup ./mimo2api > gateway.log 2>&1 &
-```
+扩展只申请 AI Studio 的 Cookie 权限，以及用户确认的网关源地址。它只发送 `userId`、`xiaomichatbot_serviceToken` 和 `xiaomichatbot_ph`，不发送完整 Cookie 集合。配对码以 Authorization 请求头传输，不放入 URL。
 
-访问 `http://127.0.0.1:8088/webui` 即可进入管理控制台。
+### 手动导入与油猴
 
----
+“连接账号”窗口内展开 **手动导入 / 油猴兼容入口**。支持 Cookie、cURL、Firefox/Chromium 存储表格、JSON 对象及 Cookie JSON 数组。解析在服务端统一完成，保留 Token 尾部的 `=`，不会把表格中的域名、路径等列误当成 Token。
 
-## 🛠️ 客户端接入配置
+油猴安装地址：`/mimo_sync.user.js`。脚本不内置服务器密码或 API Key，使用相同的一次性配对码。旧版本的 `?key=` / `?api_key=` 密钥注入方式已停止支持。
 
-### OpenAI 格式接入（NextChat / Cherry Studio / Chatbox 等）
-- **接口地址 (Base URL)**: `http://<你的服务器地址>:8088/v1`（如配置了域名或反向代理填入相应域名即可）
-- **API Key**: 填入你在 `.env` 中设置的 `MIMO_API_KEYS`
-- **支持的模型**:
-  - `mimo-v2.5-pro`
-  - `mimo-v2.5`
-  - `mimo-v2-pro`
-  - `mimo-v2`
-  - 或你在控制台配置的自定义映射别名（如 `gpt-4o`）
+## 客户端接入
 
-### Claude 格式接入
-- **接口地址 (Base URL)**: `http://<你的服务器地址>:8088/anthropic`
-- **API Key**: 填入 `MIMO_API_KEYS`
-- **模型**: 直接填写映射至的目标模型名即可
+| 协议      | Base URL                          | 请求端点            |
+| --------- | --------------------------------- | ------------------- |
+| OpenAI    | `http://127.0.0.1:8088/v1`        | `/chat/completions` |
+| Anthropic | `http://127.0.0.1:8088/anthropic` | `/v1/messages`      |
 
-### cURL 快速测试
+API Key 使用 `MIMO_API_KEYS` 中的值。文本模型：`mimo-v2.5-pro`、`mimo-v2.5`；完整清单以 `GET /v1/models` 为准。其他名称可通过控制台配置映射。
+
 ```bash
 curl http://127.0.0.1:8088/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk-mimo-my-secret-key-123456" \
-  -d '{
-    "model": "mimo-v2.5-pro",
-    "messages": [{"role": "user", "content": "你好，请做个自我介绍"}],
-    "stream": false
-  }'
+  -H "Authorization: Bearer $MIMO_API_KEYS" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"mimo-v2.5-pro","messages":[{"role":"user","content":"你好"}]}'
 ```
 
----
+## 主要环境变量
 
-## ⚙️ 环境变量配置说明
+| 变量                                          | 说明                              |
+| --------------------------------------------- | --------------------------------- |
+| `SERVER_HOST` / `SERVER_PORT`                 | 监听地址与端口，默认 0.0.0.0:8000 |
+| `MIMO_API_KEYS`                               | API 密钥，多个值用逗号分隔        |
+| `MIMO_WEBUI_USERNAME` / `MIMO_WEBUI_PASSWORD` | 控制台登录凭据                    |
+| `MIMO_WEBUI_SECRET_KEY`                       | 管理会话签名密钥                  |
+| `MIMO_WEBUI_COOKIE_SECURE`                    | HTTPS 部署时设为 true             |
+| `MIMO_METRICS_DB_PATH`                        | 指标 SQLite 数据库路径            |
+| `MIMO_AISTUDIO_PROXY`                         | 访问 AI Studio 的代理地址         |
 
-| 环境变量名 | 默认值 | 说明 |
-| :--- | :--- | :--- |
-| `SERVER_HOST` | `0.0.0.0` | 监听的主机 IP 地址 |
-| `SERVER_PORT` | `8088` | 网关服务监听端口 |
-| `GIN_MODE` | `release` | 框架运行模式 (`release` / `debug`) |
-| `MIMO_API_KEYS` | 空 | 客户端调用所需的 API 密钥，支持逗号分隔多个 |
-| `MIMO_WEBUI_USERNAME` | `admin` | WebUI 管理界面的管理员用户名 |
-| `MIMO_WEBUI_PASSWORD` | 空 | WebUI 登录密码；若留空则免密码访问 |
-| `MIMO_WEBUI_SECRET` | 随机生成 | 会话 Cookie 加密密钥（若未设置将自动生成随机安全密钥） |
-| `MIMO_WS_AUTH_TOKEN` | 空 | WebSocket 节点通信鉴权 Token |
-| `MIMO_AISTUDIO_PROXY` | 空 | 上游网络代理（例如海外机器访问国内服务被风控时可配置 HTTP/SOCKS 代理） |
-| `MIMO_MAX_ACTIVE_LIFECYCLE_SLOTS` | `4` | 最大并发维护的运行账号槽位数 |
-| `MIMO_METRICS_DB_PATH` | `gateway_metrics.db` | 本地监控指标 SQLite 存储路径 |
+账号与统计数据位于进程工作目录的 `users/` 和数据库中，不应提交到版本库。实际配置项以 `internal/config/config.go` 为准。
 
----
+## 开发与验证
 
-## 🔑 小米凭据导入说明
+```bash
+go test ./...
+go build ./cmd/mimo2api
+npm ci
+npm test
+npm run test:extension
+npx playwright install chromium
+npm run test:browser
+```
 
-在 WebUI 控制台的「运行账号」面板中点击 **「导入凭证 Cookie」**，系统支持直接识别以下格式：
+- Go：Cookie 格式、输入验证、配对鉴权、过期、单次消费、并发重放、资源下载及既有网关测试。
+- Node：Cookie 域/路径/分区过滤、容器 ID 传递、权限拒绝、请求参数、错误处理和两种油猴 Cookie API。
+- 浏览器：独立本地测试数据下的登录、空状态、配对、导入、映射、手机布局与错误状态，不访问真实账号。
+- 原生 Firefox：启动 `geckodriver --allow-system-access --port 18444`，再运行 `node tests/firefox-native.cjs`。使用驱动新建的隔离配置与合成 HttpOnly Cookie，不读取个人浏览器配置。
 
-1. **标准 Cookie 格式**：
-   ```text
-   userId=123456789; serviceToken="vjQ3..."; xiaomichatbot_ph="abcd...";
-   ```
-2. **浏览器开发者工具（F12）复制格式**：
-   支持直接从 Network 或 Application -> Cookies 表格中复制包含名称和内容的多行文本，系统内置智能清洗器，会自动提取并对齐关键凭据。
-
-> **提示**：若添加账号后控制台出现节点无法建立或风控警告，属于小米官方安全策略拦截。可通过配置国内代理（`MIMO_AISTUDIO_PROXY`）或更换未受风控的正常小米账号解决。
-
----
-
-## 📄 开源许可
-
-本项目基于 [MIT 许可证](LICENSE) 分发与开源。仅供个人技术研究、网络代理学习交流使用，严禁用于任何商业用途或违反相关服务条款的场景。
+测试截图输出到 `test-results/`，不纳入版本控制。默认 CI 不使用生产凭据、不部署线上服务。

@@ -117,7 +117,7 @@ func TestGatewayMetricsLoadSnapshotPreservesKnownModelRoutesAndCollapsesOther(t 
 		HistoryLastSnapshot: &MetricsSnapshot{
 			Routes: map[string]RouteSnapshotEntry{
 				"mimo-v2.5":     {RequestsTotal: 5},
-				"mimo-v2-flash": {RequestsTotal: 6},
+				"mimo-v2.5-pro": {RequestsTotal: 6},
 				"claude":        {RequestsTotal: 7},
 			},
 		},
@@ -145,7 +145,7 @@ func TestGatewayMetricsLoadSnapshotPreservesKnownModelRoutesAndCollapsesOther(t 
 	historySnap := Metrics.GetHistoryLastSnapshot()
 	if historySnap == nil ||
 		historySnap.Routes["mimo-v2.5"].RequestsTotal != 5 ||
-		historySnap.Routes["mimo-v2-flash"].RequestsTotal != 6 ||
+		historySnap.Routes["mimo-v2.5-pro"].RequestsTotal != 6 ||
 		historySnap.Routes[RouteMetricsOther].RequestsTotal != 7 {
 		t.Fatalf("unexpected collapsed history snapshot: %#v", historySnap)
 	}
