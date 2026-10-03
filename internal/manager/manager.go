@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -58,90 +57,22 @@ func (m *AccountManager) GetActiveUsersCount() int {
 }
 
 func (m *AccountManager) AddUser(rawText string) (string, error) {
-	cleanVal := func(s string) string {
-		s = strings.TrimSpace(s)
-		for {
-			orig := s
-			s = strings.TrimPrefix(s, "\\\"")
-			s = strings.TrimPrefix(s, "\\'")
-			s = strings.TrimPrefix(s, "\"")
-			s = strings.TrimPrefix(s, "'")
-			s = strings.TrimSuffix(s, "\\\"")
-			s = strings.TrimSuffix(s, "\\'")
-			s = strings.TrimSuffix(s, "\"")
-			s = strings.TrimSuffix(s, "'")
-			s = strings.TrimSuffix(s, "\\")
-			s = strings.TrimSpace(s)
-			if s == orig {
-				break
-			}
-		}
-		return s
+	user, err := ParseCredentials(rawText)
+	if err != nil {
+		return "", err
 	}
-
-	parsed := make(map[string]string)
-
-	// 1. Match standard cookie: key="value" or key=value
-	reCookie := regexp.MustCompile(`([a-zA-Z0-9_]+)\s*=\s*([^;\r\n]+)`)
-	for _, match := range reCookie.FindAllStringSubmatch(rawText, -1) {
-		if len(match) == 3 {
-			parsed[match[1]] = cleanVal(match[2])
-		}
+	user.AddedAt = float64(time.Now().Unix())
+	user.Status = "QUEUED"
+	if err := os.MkdirAll("users", 0700); err != nil {
+		return "", fmt.Errorf("无法创建凭据目录")
 	}
-
-	// 2. Match line-based, cURL header or tab/space/colon-separated format
-	reLine := regexp.MustCompile(`(?i)\b(userId|uid|serviceToken|xiaomichatbot_serviceToken|xiaomichatbot_ph|ph)\b\s*[:=\t ]+\s*(.+?)(?:;|\r|\n|$)`)
-	for _, match := range reLine.FindAllStringSubmatch(rawText, -1) {
-		if len(match) == 3 {
-			k := strings.ToLower(match[1])
-			v := cleanVal(match[2])
-			if k == "userid" || k == "uid" {
-				parsed["userId"] = v
-			} else if k == "servicetoken" || k == "xiaomichatbot_servicetoken" {
-				parsed["serviceToken"] = v
-			} else if k == "xiaomichatbot_ph" || k == "ph" {
-				parsed["xiaomichatbot_ph"] = v
-			}
-		}
+	data, err := json.MarshalIndent(user, "", "  ")
+	if err != nil {
+		return "", err
 	}
-
-	uid := parsed["userId"]
-	st := parsed["serviceToken"]
-	if st == "" {
-		st = parsed["xiaomichatbot_serviceToken"]
-	}
-	ph := parsed["xiaomichatbot_ph"]
-	if ph == "" {
-		ph = parsed["ph"]
-	}
-
-	if uid == "" || st == "" || ph == "" {
-		// Fallback to JSON parsing
-		var user models.UserRecord
-		if err := json.Unmarshal([]byte(rawText), &user); err == nil {
-			if user.UserID != "" {
-				uid = user.UserID
-			}
-			if user.ServiceToken != "" {
-				st = user.ServiceToken
-			}
-			if user.PH != "" {
-				ph = user.PH
-			}
-		}
-	}
-
-	if uid == "" || st == "" || ph == "" {
-		return "", fmt.Errorf("missing required fields in cookie string")
-	}
-
-	user := models.UserRecord{
-		UserID:       uid,
-		ServiceToken: st,
-		PH:           ph,
-		AddedAt:      float64(time.Now().Unix()),
-		Status:       "QUEUED",
-		RemainSec:    0,
+	filePath := filepath.Join("users", fmt.Sprintf("user_%s.json", user.UserID))
+	if err := os.WriteFile(filePath, data, 0600); err != nil {
+		return "", fmt.Errorf("无法保存凭据文件")
 	}
 
 	m.mu.Lock()
@@ -161,11 +92,6 @@ func (m *AccountManager) AddUser(rawText string) (string, error) {
 		m.UserOrder = append(m.UserOrder, user.UserID)
 	}
 	m.mu.Unlock()
-
-	os.MkdirAll("users", 0755)
-	filePath := filepath.Join("users", fmt.Sprintf("user_%s.json", user.UserID))
-	data, _ := json.MarshalIndent(user, "", "  ")
-	os.WriteFile(filePath, data, 0644)
 
 	m.ensureActiveSlots()
 

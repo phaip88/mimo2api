@@ -16,7 +16,7 @@ import (
 )
 
 func TestRouterV1MessagesForwarding(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 	// 备份并清空可能干扰测试的配置
 	oldAPIKeys := config.APIKeys
 	oldWSAuthToken := config.WSAuthToken
@@ -25,7 +25,7 @@ func TestRouterV1MessagesForwarding(t *testing.T) {
 	defer func() {
 		config.APIKeys = oldAPIKeys
 		config.WSAuthToken = oldWSAuthToken
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	}()
 
 	r := SetupRouter()
@@ -107,7 +107,7 @@ func TestRouterV1MessagesForwarding(t *testing.T) {
 }
 
 func TestRouterMimo25ConvertsSystemRoleBeforeForwarding(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 	oldAPIKeys := config.APIKeys
 	oldWSAuthToken := config.WSAuthToken
 	config.APIKeys = nil
@@ -115,7 +115,7 @@ func TestRouterMimo25ConvertsSystemRoleBeforeForwarding(t *testing.T) {
 	defer func() {
 		config.APIKeys = oldAPIKeys
 		config.WSAuthToken = oldWSAuthToken
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	}()
 
 	r := SetupRouter()
@@ -211,7 +211,7 @@ func TestRouterMimo25ConvertsSystemRoleBeforeForwarding(t *testing.T) {
 }
 
 func TestRouterV1ResponsesBridgeRouting(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 	oldAPIKeys := config.APIKeys
 	oldWSAuthToken := config.WSAuthToken
 	config.APIKeys = nil
@@ -219,7 +219,7 @@ func TestRouterV1ResponsesBridgeRouting(t *testing.T) {
 	defer func() {
 		config.APIKeys = oldAPIKeys
 		config.WSAuthToken = oldWSAuthToken
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	}()
 
 	r := SetupRouter()
@@ -333,7 +333,7 @@ func TestRouterV1ResponsesBridgeRouting(t *testing.T) {
 }
 
 func TestRouterV1ResponsesCompactRouting(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 	oldAPIKeys := config.APIKeys
 	oldWSAuthToken := config.WSAuthToken
 	config.APIKeys = nil
@@ -341,7 +341,7 @@ func TestRouterV1ResponsesCompactRouting(t *testing.T) {
 	defer func() {
 		config.APIKeys = oldAPIKeys
 		config.WSAuthToken = oldWSAuthToken
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	}()
 
 	r := SetupRouter()

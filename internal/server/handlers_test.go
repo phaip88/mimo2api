@@ -191,7 +191,7 @@ func TestConvertSystemPromptToUserForMimo25LeavesOtherModelsUntouched(t *testing
 }
 
 func TestChatCompletionsHandlerRetriesUnauthorizedNode(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 
 	oldAPIKeys := config.APIKeys
 	oldWSAuthToken := config.WSAuthToken
@@ -206,7 +206,7 @@ func TestChatCompletionsHandlerRetriesUnauthorizedNode(t *testing.T) {
 		config.WSAuthToken = oldWSAuthToken
 		config.Node401Cooldown = oldNode401Cooldown
 		config.NodeResponseIdleTimeout = oldNodeResponseIdleTimeout
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	})
 
 	r := SetupRouter()
@@ -270,14 +270,18 @@ func TestChatCompletionsHandlerRetriesUnauthorizedNode(t *testing.T) {
 	}
 }
 
-func resetGatewayStateForTest() {
-	state.ActiveClients = make(map[*websocket.Conn]*state.TunnelClient)
-	state.PendingQueues = make(map[string]chan map[string]interface{})
-	state.ReqIDToWS = make(map[string]*websocket.Conn)
-	state.WSToReqIDs = make(map[*websocket.Conn]map[string]bool)
-	state.BridgeReady = make(map[*websocket.Conn]bool)
-	state.ActiveList = nil
-	state.CurrentClientIdx = 0
+func resetGatewayStateForTest(t *testing.T) {
+	t.Helper()
+	// Hijacked WebSocket handlers outlive httptest.Server.Close. Let their locked
+	// cleanup finish instead of replacing global maps while they still use them.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if state.GetConnectedClientsCount() == 0 && state.GetPendingCount() == 0 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("gateway test leaked a WebSocket connection or pending request")
 }
 
 func dialTestNode(t *testing.T, wsURL string) *websocket.Conn {
@@ -328,13 +332,13 @@ func serveNodeResponse(t *testing.T, wsConn *websocket.Conn, body string) {
 }
 
 func TestWriteErrorResponseFormats(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 
 	oldAPIKeys := config.APIKeys
 	config.APIKeys = nil
 	t.Cleanup(func() {
 		config.APIKeys = oldAPIKeys
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	})
 
 	r := SetupRouter()
@@ -394,7 +398,7 @@ func TestWriteErrorResponseFormats(t *testing.T) {
 }
 
 func TestChatCompletionsHandlerNodeErrorAndChannelClosed(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 
 	oldAPIKeys := config.APIKeys
 	oldWSAuthToken := config.WSAuthToken
@@ -406,7 +410,7 @@ func TestChatCompletionsHandlerNodeErrorAndChannelClosed(t *testing.T) {
 		config.APIKeys = oldAPIKeys
 		config.WSAuthToken = oldWSAuthToken
 		config.NodeResponseIdleTimeout = oldNodeResponseIdleTimeout
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	})
 
 	r := SetupRouter()
@@ -417,7 +421,7 @@ func TestChatCompletionsHandlerNodeErrorAndChannelClosed(t *testing.T) {
 
 	// Case 1: Node returns error message (non-streaming)
 	t.Run("node_error_non_streaming", func(t *testing.T) {
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 		node := dialTestNode(t, wsBaseURL+"?node_label=node-err")
 		defer node.Close()
 
@@ -480,7 +484,7 @@ func TestChatCompletionsHandlerNodeErrorAndChannelClosed(t *testing.T) {
 
 	// Case 2: Node channel closed unexpectedly (non-streaming)
 	t.Run("node_channel_closed", func(t *testing.T) {
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 		node := dialTestNode(t, wsBaseURL+"?node_label=node-close")
 
 		go func() {
@@ -521,13 +525,13 @@ func TestChatCompletionsHandlerNodeErrorAndChannelClosed(t *testing.T) {
 }
 
 func TestAPIAuthMiddlewareFormats(t *testing.T) {
-	resetGatewayStateForTest()
+	resetGatewayStateForTest(t)
 
 	oldAPIKeys := config.APIKeys
 	config.APIKeys = []string{"valid-key"}
 	t.Cleanup(func() {
 		config.APIKeys = oldAPIKeys
-		resetGatewayStateForTest()
+		resetGatewayStateForTest(t)
 	})
 
 	r := SetupRouter()

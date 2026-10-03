@@ -19,3 +19,6 @@ archive_*
 __pycache__
 node_modules
 users*/
+.verify/
+playwright-report/
+test-results/

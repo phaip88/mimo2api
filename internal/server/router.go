@@ -4,9 +4,13 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"io/fs"
+	assets "mimo2api"
+	"net/http"
 
 	"mimo2api/internal/auth"
 	"mimo2api/internal/config"
+	"mimo2api/internal/manager"
 )
 
 func SetupRouter() *gin.Engine {
@@ -39,6 +43,11 @@ func SetupRouter() *gin.Engine {
 	r.GET("/", WebUIHandler)
 	r.GET("/webui", WebUIHandler)
 	r.GET("/mimo_sync.user.js", UserscriptHandler)
+	r.GET("/mimo-connector.zip", ExtensionDownloadHandler)
+	web, _ := fs.Sub(assets.Files, "web")
+	r.StaticFS("/assets", http.FS(web))
+	pairing := newPairingStore()
+	r.POST("/api/sync/import", pairing.importHandler(manager.GlobalManager.AddUser))
 
 	uiAPI := r.Group("/api")
 	{
@@ -59,6 +68,7 @@ func SetupRouter() *gin.Engine {
 		protected.Use(auth.WebUIMiddleware())
 		{
 
+			protected.POST("/sync/pairing", auth.AdminSessionMiddleware(), pairing.createHandler)
 			protected.GET("/users/list", UsersListHandler)
 			protected.POST("/users/add", UsersAddHandler)
 			protected.DELETE("/users/delete/:id", UsersDeleteHandler)
@@ -100,8 +110,4 @@ func SetupRouter() *gin.Engine {
 	r.GET("/ws", WSTunnelHandler)
 
 	return r
-}
-
-func WebUIHandler(c *gin.Context) {
-	c.File("webui.html")
 }
