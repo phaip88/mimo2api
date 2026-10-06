@@ -57,12 +57,27 @@ func (m *AccountManager) GetActiveUsersCount() int {
 }
 
 func (m *AccountManager) AddUser(rawText string) (string, error) {
+	return m.addUser(rawText, nil)
+}
+
+func (m *AccountManager) addUser(rawText string, saved *models.UserRecord) (string, error) {
 	user, err := ParseCredentials(rawText)
 	if err != nil {
 		return "", err
 	}
 	user.AddedAt = float64(time.Now().Unix())
 	user.Status = "QUEUED"
+	if saved != nil && saved.UserID == user.UserID {
+		user.Name = saved.Name
+		if saved.AddedAt > 0 {
+			user.AddedAt = saved.AddedAt
+		}
+		user.DailyLimitAt = saved.DailyLimitAt
+		user.DailyCreatedAt = saved.DailyCreatedAt
+		if user.DailyLimitAt >= beijingMidnightToday() {
+			user.Status = "DAILY_LIMIT"
+		}
+	}
 	if err := os.MkdirAll("users", 0700); err != nil {
 		return "", fmt.Errorf("无法创建凭据目录")
 	}
@@ -104,6 +119,9 @@ type lifecycleLaunch struct {
 }
 
 func (m *AccountManager) ensureActiveSlots() {
+	if !m.checkDeploymentBeforeScheduling() {
+		return
+	}
 	launches := m.reserveLifecycleSlots()
 	for _, launch := range launches {
 		go m.runLifecycle(launch.user, launch.stopCh)
@@ -177,7 +195,11 @@ func (m *AccountManager) releaseLifecycleSlot(userID string, stopCh chan struct{
 	if current, ok := m.LifecycleStops[userID]; ok && current == stopCh {
 		delete(m.LifecycleStops, userID)
 		if user, exists := m.Users[userID]; exists {
-			user.Status = "QUEUED"
+			if user.DailyLimitAt >= beijingMidnightToday() {
+				user.Status = "DAILY_LIMIT"
+			} else {
+				user.Status = "QUEUED"
+			}
 			user.RemainSec = 0
 			user.LastRefresh = float64(time.Now().Unix())
 			m.Users[userID] = user
@@ -338,12 +360,15 @@ func (m *AccountManager) updateUserRuntime(userID, status string, remainSec int)
 }
 
 func (m *AccountManager) runLifecycle(user models.UserRecord, stopCh chan struct{}) {
-	payloadPath := "bridge/node-metrics-agent-linux-amd64.gif"
+	payloadPath := BridgePayloadPath
 	lastSeenRebuild := m.currentRebuildVersion()
 	userLogf := func(format string, args ...interface{}) {
 		managerLogf("[manager:%s] %s", user.UserID, fmt.Sprintf(format, args...))
 	}
 	defer m.releaseLifecycleSlot(user.UserID, stopCh)
+	if !m.checkDeploymentBeforeScheduling() {
+		return
+	}
 
 	for {
 		if isStopRequested(stopCh) {
@@ -632,7 +657,12 @@ func (m *AccountManager) LoadUsersFromDir(dirPath string) {
 				managerLogf("Failed to read user file %s: %v", path, err)
 				continue
 			}
-			uid, err := m.AddUser(string(data))
+			var saved models.UserRecord
+			if err := json.Unmarshal(data, &saved); err != nil {
+				managerLogf("Invalid user record %s", path)
+				continue
+			}
+			uid, err := m.addUser(string(data), &saved)
 			if err != nil {
 				managerLogf("Failed to add user from %s: %v", path, err)
 			} else {

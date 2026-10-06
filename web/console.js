@@ -203,9 +203,20 @@ function switchTab(tab) {
   if (authenticated) refresh();
 }
 function statusFor(user) {
-  const raw = String(user.claw_status || "QUEUED");
+  const raw = String(
+    user.api_status ||
+      (user.claw_status === "AVAILABLE"
+        ? "INSTANCE_READY"
+        : user.claw_status) ||
+      "QUEUED",
+  );
   const labels = {
-    AVAILABLE: "可用",
+    AVAILABLE: "API 可用",
+    INSTANCE_READY: "实例就绪 · 节点未连接",
+    NODE_UNAVAILABLE: "节点暂不可用",
+    BRIDGE_MISSING: "缺少桥接文件",
+    BRIDGE_INVALID: "桥接文件无效",
+    BRIDGE_UNREADABLE: "桥接文件不可读",
     QUEUED: "排队中",
     SCHEDULED: "已调度",
     CREATING: "创建中",
@@ -218,7 +229,7 @@ function statusFor(user) {
   const kind =
     raw === "AVAILABLE"
       ? "success"
-      : /401|EXPIRED|ERROR|FAIL/i.test(raw)
+      : /401|EXPIRED|ERROR|FAIL|BRIDGE_/i.test(raw)
         ? "danger"
         : "warning";
   return (
@@ -310,15 +321,25 @@ function updateCountdowns() {
   });
 }
 function renderStatus(data) {
-  const active = number(data.active_clients);
-  $("metricNodes").textContent = active;
-  $("heroState").textContent = active > 0 ? "服务运行中" : "等待连接";
-  $("statusTitle").textContent =
-    active > 0 ? "网关已就绪" : "等待你的第一个连接";
-  $("statusText").textContent =
-    active > 0
-      ? active + " 个节点在线，已准备好接收 API 请求。"
-      : "当前没有在线节点。连接账号后，网关将启动可用环境。";
+  const connected = number(data.active_clients);
+  const available = number(data.available_clients);
+  $("metricNodes").textContent = available;
+  if (available > 0) {
+    $("heroState").textContent = "服务运行中";
+    $("statusTitle").textContent = "网关已就绪";
+    $("statusText").textContent = available + " 个 MiMo 节点可接收 API 请求。";
+  } else if (data.deployment && !data.deployment.ready) {
+    $("heroState").textContent = "部署不完整";
+    $("statusTitle").textContent = "桥接组件未就绪";
+    $("statusText").textContent = data.deployment.message;
+  } else {
+    $("heroState").textContent = connected ? "节点暂不可用" : "等待连接";
+    $("statusTitle").textContent = connected
+      ? "暂无可用的模型节点"
+      : "模型节点尚未连接";
+    $("statusText").textContent =
+      "账号凭据已保存或实例就绪，不代表 API 可用。请检查节点连接状态。";
+  }
 }
 function renderStats(data) {
   const total = number(data.requests?.total),
@@ -332,7 +353,7 @@ function renderStats(data) {
     : "暂无请求，不计算成功率";
   $("metricLatency").textContent = milliseconds(data.latency?.avg_ms);
   $("metricTTFT").textContent =
-    "首字延迟 " + milliseconds(data.first_byte?.avg_ms);
+    "首字延迟 " + milliseconds(data.first_byte_latency?.avg_ms);
   const routes = data.routes || {};
   let input = 0,
     output = 0,

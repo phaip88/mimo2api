@@ -60,8 +60,10 @@ func init() {
 func SystemStatusHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		// 修复: 避免产生并发竞争(Data Race)引发宕机
-		"active_clients": state.GetConnectedClientsCount(),
-		"tts":            tts.StatusSnapshot(),
+		"active_clients":    state.GetConnectedClientsCount(),
+		"available_clients": availableMimoNodes(),
+		"deployment":        manager.CheckDeployment(),
+		"tts":               tts.StatusSnapshot(),
 	})
 }
 
@@ -930,7 +932,7 @@ attemptLoop:
 			state.Metrics.RecordRequestFinished(routeKey, statusCode, float64(time.Since(startTime).Milliseconds()), 0, false)
 			if attempt == 1 {
 				log.Printf("[ERR] req=%s node=nil route=%s status=503 dur=%dms reason=no_available_node", reqID, routeKey, time.Since(startTime).Milliseconds())
-				writeErrorResponse(c, http.StatusServiceUnavailable, "Gateway Error: 没有可用的内网节点")
+				writeErrorResponse(c, http.StatusServiceUnavailable, unavailableNodeMessage())
 			} else {
 				log.Printf("[ERR] req=%s node=nil route=%s status=503 dur=%dms attempts=%d reason=no_available_node_for_retry", reqID, routeKey, time.Since(startTime).Milliseconds(), attempt-1)
 				writeErrorResponse(c, http.StatusServiceUnavailable, "Gateway Error: 没有可用的重试节点")
