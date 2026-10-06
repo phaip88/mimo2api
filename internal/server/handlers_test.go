@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"mimo2api/internal/config"
+	"mimo2api/internal/manager"
 	"mimo2api/internal/state"
 )
 
@@ -332,6 +335,13 @@ func serveNodeResponse(t *testing.T, wsConn *websocket.Conn, body string) {
 }
 
 func TestWriteErrorResponseFormats(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(filepath.Dir(manager.BridgePayloadPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manager.BridgePayloadPath, []byte("test fixture, never executed"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	resetGatewayStateForTest(t)
 
 	oldAPIKeys := config.APIKeys
