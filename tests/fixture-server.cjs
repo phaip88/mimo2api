@@ -8,7 +8,8 @@ let users = [],
   mappings = {},
   lastImport = "",
   errorPath = "",
-  requests = 0;
+  requests = 0,
+  deployment = { ready: true, code: "READY" };
 const token = () => crypto.randomBytes(32).toString("base64url");
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
@@ -31,11 +32,13 @@ const server = http.createServer(async (req, res) => {
     lastImport = "";
     errorPath = "";
     requests = 0;
+    deployment = { ready: true, code: "READY" };
     return json({ ok: true });
   }
   if (url.pathname === "/__test/state") {
     if (req.method === "POST") {
       if (body.users) users = body.users;
+      if (body.deployment) deployment = body.deployment;
       if (body.mappings) mappings = body.mappings;
       if (body.errorPath !== undefined) errorPath = body.errorPath;
       requests = body.requests || 0;
@@ -71,7 +74,10 @@ const server = http.createServer(async (req, res) => {
     return json({ detail: "unauthorized" }, 401);
   if (url.pathname === "/api/system/status")
     return json({
-      active_clients: users.filter((u) => u.claw_status === "AVAILABLE").length,
+      active_clients: users.filter((u) => u.api_status === "AVAILABLE").length,
+      available_clients: users.filter((u) => u.api_status === "AVAILABLE")
+        .length,
+      deployment,
     });
   if (url.pathname === "/api/users/list") return json({ users });
   if (url.pathname === "/api/users/add") {
@@ -116,7 +122,7 @@ const server = http.createServer(async (req, res) => {
       uptime_seconds: 9813,
       requests: { total: requests, succeeded: requests, failed: 0 },
       latency: { avg_ms: requests ? 258.4 : 0 },
-      first_byte: { avg_ms: requests ? 134.6 : 0 },
+      first_byte_latency: { avg_ms: requests ? 134.6 : 0 },
       routes: requests
         ? {
             "mimo-v2.5-pro": {

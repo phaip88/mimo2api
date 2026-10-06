@@ -86,6 +86,7 @@ test("populated dashboard, escaped account text and mobile layout", async ({
           userId: "100001",
           name: "主要账号",
           claw_status: "AVAILABLE",
+          api_status: "AVAILABLE",
           remain_sec: 65000,
           has_credentials: true,
         },
@@ -136,4 +137,56 @@ test("API failures stay visible rather than showing false healthy state", async 
   await page.getByRole("button", { name: "刷新", exact: true }).click();
   await expect(page.locator("#connectionNotice")).toBeVisible();
   await expect(page.locator("#heroState")).toHaveText("连接异常");
+});
+
+test("instance ready without a node is never presented as API available", async ({
+  page,
+  request,
+}) => {
+  await request.post("/__test/state", {
+    data: {
+      users: [
+        {
+          userId: "12345",
+          claw_status: "AVAILABLE",
+          api_status: "INSTANCE_READY",
+          has_credentials: true,
+          remain_sec: 6000,
+        },
+      ],
+    },
+  });
+  await login(page);
+  await expect(page.locator("#metricNodes")).toHaveText("0");
+  await expect(page.locator("#overviewAccounts")).toContainText(
+    "实例就绪 · 节点未连接",
+  );
+  await expect(page.locator("#overviewAccounts .badge.success")).toHaveCount(0);
+});
+test("missing bridge is explained without prompting repeated account creation", async ({
+  page,
+  request,
+}) => {
+  await request.post("/__test/state", {
+    data: {
+      deployment: {
+        ready: false,
+        code: "BRIDGE_MISSING",
+        message: "部署缺少桥接文件，已暂停实例创建。",
+      },
+      users: [
+        {
+          userId: "12345",
+          claw_status: "BRIDGE_MISSING",
+          api_status: "BRIDGE_MISSING",
+          has_credentials: true,
+          remain_sec: 0,
+        },
+      ],
+    },
+  });
+  await login(page);
+  await expect(page.locator("#heroState")).toHaveText("部署不完整");
+  await expect(page.locator("#statusText")).toContainText("已暂停实例创建");
+  await expect(page.locator("#overviewAccounts")).toContainText("缺少桥接文件");
 });
